@@ -1,7 +1,9 @@
 <?php
 
-require("config.php");
 session_start();
+require("config.php");
+
+
 $action = isset($_GET['action']) ? $_GET['action'] : "";
 $username = isset($_SESSION['username']) ? $_SESSION['username'] : "";
 
@@ -38,15 +40,30 @@ switch ($action) {
     case 'deleteCategory':
         deleteCategory();
         break;
+    case 'updateArticleVisibility':
+        updateArticleVisibility();
+        break;
+    case 'listUsers':
+        listUsers();
+        break;
+    case 'newUser':
+        newUser();
+        break;
+    case 'editUser':
+        editUser();
+        break;
+    case 'deleteUser':
+        deleteUser();
+        break;
     default:
         listArticles();
 }
 
 /**
- * Авторизация пользователя (админа) -- установка значения в сессию
+ * Авторизация пользователя 
  */
 function login() {
-
+    
     $results = array();
     $results['pageTitle'] = "Admin Login | Widget News";
 
@@ -54,54 +71,95 @@ function login() {
 
         // Пользователь получает форму входа: попытка авторизировать пользователя
 
-        if ($_POST['username'] == ADMIN_USERNAME 
-                && $_POST['password'] == ADMIN_PASSWORD) {
+        $username = $_POST['username'];
+        $password = $_POST['password'];
 
-          // Вход прошел успешно: создаем сессию и перенаправляем на страницу администратора
+        // если админ
+
+        if ($username == ADMIN_USERNAME && $password == ADMIN_PASSWORD) {
           $_SESSION['username'] = ADMIN_USERNAME;
+          if (isset($_POST['ajax'])) {
+                echo json_encode(['success' => true, 'message' => 'Успешный вход!', 'redirect' => 'admin.php']);
+                exit;
+        }
           header( "Location: admin.php");
+          return;
 
         } else {
+            $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+            $sql = "SELECT * FROM users WHERE login = :username AND is_active = 1";
+            $st = $conn->prepare($sql);
+            $st->bindValue(":username", $username, PDO::PARAM_STR);
+            $st->execute();
+            
+            $user = $st->fetch(PDO::FETCH_ASSOC);
+            $conn = null;
 
-          // Ошибка входа: выводим сообщение об ошибке для пользователя
-          $results['errorMessage'] = "Неправильный пароль, попробуйте ещё раз.";
-          require( TEMPLATE_PATH . "/admin/loginForm.php" );
+            if ($user && password_verify($password, $user['password'])) {
+                // ВСЁ ОК
+                $_SESSION['username'] = $user['login'];
+                $_SESSION['user_id'] = $user['id'];
+                if (isset($_POST['ajax'])) {
+                    echo json_encode(['success' => true, 'message' => 'Успешный вход!', 'redirect' => 'admin.php']);
+                    exit;
+                }
+                header("Location: admin.php");
+                return;
+            } elseif ($user && !password_verify($password, $user['password'])) {
+                $results['errorMessage'] = "Неправильный пароль.";
+            } else {
+                $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+                $sql = "SELECT * FROM users WHERE login = :username AND is_active = 0";
+                $st = $conn->prepare($sql);
+                $st->bindValue(":username", $username, PDO::PARAM_STR);
+                $st->execute();
+                
+                $inactiveUser = $st->fetch(PDO::FETCH_ASSOC);
+                $conn = null;
+
+                if ($inactiveUser && password_verify($password, $inactiveUser['password'])) {
+                    // найден но неактивен
+                    $results['errorMessage'] = "Ваш аккаунт деактивирован";
+                } else {
+                    // не найден или неверные данные
+                    $results['errorMessage'] = "Неправильный логин или пароль";
+                }
+            }
         }
+        if (isset($_POST['ajax'])) {
+            echo json_encode(['success' => false, 'message' => $results['errorMessage']]);
+            exit;
+        }
+        require(TEMPLATE_PATH . "/admin/loginForm.php");
 
     } else {
-
-      // Пользователь еще не получил форму: выводим форму
-      require(TEMPLATE_PATH . "/admin/loginForm.php");
+        if (isset($_POST['ajax'])) {
+            echo json_encode(['success' => false, 'message' => $results['errorMessage']]);
+            exit;
+        }
+        require(TEMPLATE_PATH . "/admin/loginForm.php");
     }
 
 }
 
 
 function logout() {
+
     unset( $_SESSION['username'] );
     header( "Location: admin.php" );
 }
 
 
 function newArticle() {
-	  
+
     $results = array();
     $results['pageTitle'] = "New Article";
     $results['formAction'] = "newArticle";
 
     if ( isset( $_POST['saveChanges'] ) ) {
-//            echo "<pre>";
-//            print_r($results);
-//            print_r($_POST);
-//            echo "<pre>";
-//            В $_POST данные о статье сохраняются корректно
         // Пользователь получает форму редактирования статьи: сохраняем новую статью
         $article = new Article();
         $article->storeFormValues( $_POST );
-//            echo "<pre>";
-//            print_r($article);
-//            echo "<pre>";
-//            А здесь данные массива $article уже неполные(есть только Число от даты, категория и полный текст статьи)          
         $article->insert();
         header( "Location: admin.php?status=changesSaved" );
 
@@ -119,6 +177,27 @@ function newArticle() {
     }
 }
 
+/**
+ * Обновление видимости статьи
+ */
+function updateArticleVisibility() {
+    if (!isset($_POST['articleId']) || !$_POST['articleId']) {
+        header("Location: admin.php?action=listArticles");
+        return;
+    }
+
+    $article = Article::getById((int)$_POST['articleId']);
+    if (!$article) {
+        header("Location: admin.php?action=listArticles");
+        return;
+    }
+
+    $article->is_visible = isset($_POST['is_visible']) ? 1 : 0;
+    $article->update();
+
+    header("Location: admin.php?action=listArticles");
+    exit;
+}
 
 /**
  * Редактирование статьи
@@ -126,7 +205,7 @@ function newArticle() {
  * @return null
  */
 function editArticle() {
-	  
+
     $results = array();
     $results['pageTitle'] = "Edit Article";
     $results['formAction'] = "editArticle";
@@ -172,9 +251,10 @@ function deleteArticle() {
 
 
 function listArticles() {
+
     $results = array();
     
-    $data = Article::getList();
+    $data = Article::getListForAdmin();
     $results['articles'] = $data['results'];
     $results['totalRows'] = $data['totalRows'];
     
@@ -204,6 +284,7 @@ function listArticles() {
 }
 
 function listCategories() {
+
     $results = array();
     $data = Category::getList();
     $results['categories'] = $data['results'];
@@ -303,4 +384,93 @@ function deleteCategory() {
     header( "Location: admin.php?action=listCategories&status=categoryDeleted" );
 }
 
-        
+function listUsers() {
+
+    $results = array();
+    
+    $data = User::getList();
+    $results['users'] = $data['results'];
+    $results['totalRows'] = $data['totalRows'];
+    $results['pageTitle'] = "Все пользователи";
+    
+    if (isset($_GET['error'])) { // вывод сообщения об ошибке (если есть)
+        if ($_GET['error'] == "userNotFound") 
+            $results['errorMessage'] = "Error: User not found.";
+    }
+
+    if (isset($_GET['status'])) { // вывод сообщения (если есть)
+        if ($_GET['status'] == "changesSaved") {
+            $results['statusMessage'] = "Your changes have been saved.";
+        }
+        if ($_GET['status'] == "userDeleted")  {
+            $results['statusMessage'] = "User deleted.";
+        }
+    }
+
+    require(TEMPLATE_PATH . "/admin/listUsers.php" );
+}
+
+
+function newUser() {
+
+    $results = array();
+    $results['pageTitle'] = "New User";
+    $results['formAction'] = "newUser";
+
+    if ( isset( $_POST['saveChanges'] ) ) {
+
+        $user = new User;
+        $user->storeFormValues( $_POST );
+        $user->insert();
+        header( "Location: admin.php?action=listUsers&status=changesSaved" );
+
+    } elseif ( isset( $_POST['cancel'] ) ) {
+
+        header( "Location: admin.php?action=listUsers" );
+    } else {
+
+        $results['user'] = new User;
+        require( TEMPLATE_PATH . "/admin/editUser.php" );
+    }
+
+}
+
+function editUser() {
+
+    $results = array();
+    $results['pageTitle'] = "Edit User";
+    $results['formAction'] = "editUser";
+
+    if ( isset( $_POST['saveChanges'] ) ) {
+
+        if ( !$user = User::getById( (int)$_POST['userId'] ) ) {
+          header( "Location: admin.php?action=listUsers&error=userNotFound" );
+          return;
+        }
+
+        $user->storeFormValues( $_POST );
+        $user->update();
+        header( "Location: admin.php?action=listUsers&status=changesSaved" );
+
+    } elseif ( isset( $_POST['cancel'] ) ) {
+
+        header( "Location: admin.php?action=listUsers" );
+    } else {
+
+        $results['user'] = User::getById( (int)$_GET['userId'] );
+        require( TEMPLATE_PATH . "/admin/editUser.php" );
+    }
+
+}
+
+
+function deleteUser() {
+
+    if (!$user = User::getById((int)$_GET['userId'])) {
+        header("Location: admin.php?action=listUsers&error=userNotFound");
+        return;
+    }
+
+    $user->delete();
+    header("Location: admin.php?action=listUsers&status=userDeleted");
+}

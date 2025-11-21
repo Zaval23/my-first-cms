@@ -17,6 +17,7 @@
               <th>Publication Date</th>
               <th>Article</th>
               <th>Category</th>
+              <th>Visibility</th>
             </tr>
 
 <!--<?php echo "<pre>"; print_r ($results['articles'][2]->publicationDate); echo "</pre>"; ?> Обращаемся к дате массива $results. Дата = 0 -->
@@ -42,6 +43,16 @@
                 echo "Без категории";
                 }?>
               </td>
+              <td onclick="event.stopPropagation()" style="text-align: center;">
+    <form method="post" action="admin.php?action=updateArticleVisibility" style="display: inline; margin: 0; padding: 0;">
+        <input type="hidden" name="articleId" value="<?php echo $article->id?>">
+        <input type="checkbox" name="is_visible" value="1" 
+            <?php echo $article->is_visible ? 'checked' : ''?>
+            onchange="this.form.submit()" 
+            style="width: auto; display: inline; margin: 0; transform: scale(1.2);">
+    </form>
+</td>
+        </td>
             </tr>
 
     <?php } ?>
@@ -52,4 +63,29 @@
 
           <p><a href="admin.php?action=newArticle">Add a New Article</a></p>
 
-<?php include "templates/include/footer.php" ?>              
+<?php include "templates/include/footer.php" ?>
+<script>
+function updateVisibility(articleId, value) {
+    // Создаем форму для отправки данных
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'admin.php?action=updateArticleVisibility';
+    
+    // Добавляем скрытые поля
+    var articleIdField = document.createElement('input');
+    articleIdField.type = 'hidden';
+    articleIdField.name = 'articleId';
+    articleIdField.value = articleId;
+    form.appendChild(articleIdField);
+    
+    var visibilityField = document.createElement('input');
+    visibilityField.type = 'hidden';
+    visibilityField.name = 'is_visible';
+    visibilityField.value = value;
+    form.appendChild(visibilityField);
+    
+    // Добавляем форму на страницу и отправляем
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>            

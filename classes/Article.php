@@ -36,6 +36,8 @@ class Article
     * @var string HTML содержание статьи
     */
     public $content = null;
+
+    public $is_visible = 1;
     
     /**
      * Создаст объект статьи
@@ -70,6 +72,10 @@ class Article
       if (isset($data['content'])) {
           $this->content = $data['content'];  
       }
+
+      if (isset($data['is_visible'])) {
+        $this->is_visible = (int)$data['is_visible'];
+    }
     }
 
 
@@ -92,6 +98,10 @@ class Article
           $this->publicationDate = mktime ( 0, 0, 0, $m, $d, $y );
         }
       }
+
+      if ( isset($params['is_visible']) ) {
+        $this->is_visible = (int)$params['is_visible'];
+    }
     }
 
 
@@ -127,50 +137,69 @@ class Article
     * @return Array|false Двух элементный массив: results => массив объектов Article; totalRows => общее количество строк
     */
     public static function getList($numRows=1000000, 
-            $categoryId=null, $order="publicationDate DESC") 
-    {
-        $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
-        $fromPart = "FROM articles";
-        $categoryClause = $categoryId ? "WHERE categoryId = :categoryId" : "";
-        $sql = "SELECT *, UNIX_TIMESTAMP(publicationDate) 
-                AS publicationDate
-                $fromPart $categoryClause
-                ORDER BY  $order  LIMIT :numRows";
-        
-        $st = $conn->prepare($sql);
-        $st->bindValue(":numRows", $numRows, PDO::PARAM_INT);
-	/**
-	 * Можно использовать debugDumpParams() для отладки параметров, 
-	 * привязанных выше с помощью bind()
-	 * @see https://www.php.net/manual/ru/pdostatement.debugdumpparams.php
-	 */
-      
-        if ($categoryId) 
-            $st->bindValue( ":categoryId", $categoryId, PDO::PARAM_INT);
-        
-        $st->execute(); // выполняем запрос к базе данных
-        $list = array();
-
-        while ($row = $st->fetch()) {
-            $article = new Article($row);
-            $list[] = $article;
-        }
-
-        // Получаем общее количество статей, которые соответствуют критерию
-        $sql = "SELECT COUNT(*) AS totalRows $fromPart $categoryClause";
-	$st = $conn->prepare($sql);
-	if ($categoryId) 
-            $st->bindValue( ":categoryId", $categoryId, PDO::PARAM_INT);
-	$st->execute(); // выполняем запрос к базе данных                    
-        $totalRows = $st->fetch();
-        $conn = null;
-        
-        return (array(
-            "results" => $list, 
-            "totalRows" => $totalRows[0]
-            ) 
-        );
+        $categoryId=null, $order="publicationDate DESC") 
+{
+    $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+    $fromPart = "FROM articles";
+    
+    // СОЗДАЕМ УСЛОВИЯ WHERE
+    $whereClauses = array();
+    $params = array();
+    
+    // Условие для категории
+    if ($categoryId) {
+        $whereClauses[] = "categoryId = :categoryId";
+        $params[':categoryId'] = $categoryId;
     }
+    
+    // Условие для видимости - ВСЕГДА показываем только видимые статьи
+    $whereClauses[] = "is_visible = 1";
+    
+    // Формируем полное условие WHERE
+    $whereClause = "";
+    if (!empty($whereClauses)) {
+        $whereClause = "WHERE " . implode(" AND ", $whereClauses);
+    }
+    
+    $sql = "SELECT *, UNIX_TIMESTAMP(publicationDate) 
+            AS publicationDate
+            $fromPart $whereClause
+            ORDER BY  $order  LIMIT :numRows";
+    
+    $st = $conn->prepare($sql);
+    $st->bindValue(":numRows", $numRows, PDO::PARAM_INT);
+    
+    // Привязываем параметры
+    foreach ($params as $key => $value) {
+        $st->bindValue($key, $value, PDO::PARAM_INT);
+    }
+    
+    $st->execute();
+    $list = array();
+
+    while ($row = $st->fetch()) {
+        $article = new Article($row);
+        $list[] = $article;
+    }
+
+    // Получаем общее количество статей, которые соответствуют критерию
+    $sql = "SELECT COUNT(*) AS totalRows $fromPart $whereClause";
+    $st = $conn->prepare($sql);
+    
+    // Привязываем параметры для COUNT запроса
+    foreach ($params as $key => $value) {
+        $st->bindValue($key, $value, PDO::PARAM_INT);
+    }
+    
+    $st->execute();                    
+    $totalRows = $st->fetch();
+    $conn = null;
+    
+    return array(
+        "results" => $list, 
+        "totalRows" => $totalRows[0]
+    );
+}
 
     /**
     * Вставляем текущий объект Article в базу данных, устанавливаем его ID
@@ -182,13 +211,14 @@ class Article
 
         // Вставляем статью
         $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
-        $sql = "INSERT INTO articles ( publicationDate, categoryId, title, summary, content ) VALUES ( FROM_UNIXTIME(:publicationDate), :categoryId, :title, :summary, :content )";
-        $st = $conn->prepare ( $sql );
+        $sql = "INSERT INTO articles ( publicationDate, categoryId, title, summary, content, is_visible ) VALUES ( FROM_UNIXTIME(:publicationDate), :categoryId, :title, :summary, :content, :is_visible )";        $st = $conn->prepare ( $sql );
         $st->bindValue( ":publicationDate", $this->publicationDate, PDO::PARAM_INT );
         $st->bindValue( ":categoryId", $this->categoryId, PDO::PARAM_INT );
         $st->bindValue( ":title", $this->title, PDO::PARAM_STR );
         $st->bindValue( ":summary", $this->summary, PDO::PARAM_STR );
         $st->bindValue( ":content", $this->content, PDO::PARAM_STR );
+
+        $st->bindValue( ":is_visible", $this->is_visible, PDO::PARAM_INT );
         $st->execute();
         $this->id = $conn->lastInsertId();
         $conn = null;
@@ -206,9 +236,7 @@ class Article
 
       // Обновляем статью
       $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
-      $sql = "UPDATE articles SET publicationDate=FROM_UNIXTIME(:publicationDate),"
-              . " categoryId=:categoryId, title=:title, summary=:summary,"
-              . " content=:content WHERE id = :id";
+      $sql = "UPDATE articles SET publicationDate=FROM_UNIXTIME(:publicationDate), categoryId=:categoryId, title=:title, summary=:summary, content=:content, is_visible=:is_visible WHERE id = :id";
       
       $st = $conn->prepare ( $sql );
       $st->bindValue( ":publicationDate", $this->publicationDate, PDO::PARAM_INT );
@@ -217,6 +245,7 @@ class Article
       $st->bindValue( ":summary", $this->summary, PDO::PARAM_STR );
       $st->bindValue( ":content", $this->content, PDO::PARAM_STR );
       $st->bindValue( ":id", $this->id, PDO::PARAM_INT );
+      $st->bindValue( ":is_visible", $this->is_visible, PDO::PARAM_INT );
       $st->execute();
       $conn = null;
     }
@@ -237,5 +266,47 @@ class Article
       $st->execute();
       $conn = null;
     }
+
+/**
+ * Возвращает все статьи для админки (без фильтрации по видимости)
+ */
+public static function getListForAdmin($numRows=1000000, $categoryId=null, $order="publicationDate DESC") {
+    $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+    $fromPart = "FROM articles";
+    $categoryClause = $categoryId ? "WHERE categoryId = :categoryId" : "";
+    $sql = "SELECT *, UNIX_TIMESTAMP(publicationDate) 
+            AS publicationDate
+            $fromPart $categoryClause
+            ORDER BY  $order  LIMIT :numRows";
+    
+    $st = $conn->prepare($sql);
+    $st->bindValue(":numRows", $numRows, PDO::PARAM_INT);
+    
+    if ($categoryId) {
+        $st->bindValue(":categoryId", $categoryId, PDO::PARAM_INT);
+    }
+    
+    $st->execute();
+    $list = array();
+
+    while ($row = $st->fetch()) {
+        $article = new Article($row);
+        $list[] = $article;
+    }
+
+    $sql = "SELECT COUNT(*) AS totalRows $fromPart $categoryClause";
+    $st = $conn->prepare($sql);
+    if ($categoryId) {
+        $st->bindValue(":categoryId", $categoryId, PDO::PARAM_INT);
+    }
+    $st->execute();                    
+    $totalRows = $st->fetch();
+    $conn = null;
+    
+    return array(
+        "results" => $list, 
+        "totalRows" => $totalRows[0]
+    );
+}
 
 }
