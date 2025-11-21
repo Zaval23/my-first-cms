@@ -407,32 +407,27 @@ function listUsers() {
         }
     }
 
-    require(TEMPLATE_PATH . "/admin/listUsers.php" );
+    require(TEMPLATE_PATH . "/admin/listUsers.php");
 }
 
 
 function newUser() {
-
     $results = array();
     $results['pageTitle'] = "New User";
     $results['formAction'] = "newUser";
 
     if ( isset( $_POST['saveChanges'] ) ) {
-
         $user = new User;
         $user->storeFormValues( $_POST );
         $user->insert();
         header( "Location: admin.php?action=listUsers&status=changesSaved" );
-
     } elseif ( isset( $_POST['cancel'] ) ) {
-
         header( "Location: admin.php?action=listUsers" );
     } else {
-
+        // ВАЖНО: должно быть editUser.php, а не listUsers.php
         $results['user'] = new User;
         require( TEMPLATE_PATH . "/admin/editUser.php" );
     }
-
 }
 
 function editUser() {
