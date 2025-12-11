@@ -45,6 +45,11 @@ class Article
     public $is_visible = 1;
     
     /**
+     * @var array Массив авторов статьи (объекты User)
+     */
+    public $authors = array();
+    
+    /**
      * Создаст объект статьи
      * 
      * @param array $data массив значений (столбцов) строки таблицы статей
@@ -132,7 +137,9 @@ class Article
         $conn = null;
         
         if ($row) { 
-            return new Article($row);
+            $article = new Article($row);
+            $article->loadAuthors(); // Загружаем авторов
+            return $article;
         }
     }
 
@@ -195,6 +202,7 @@ class Article
 
     while ($row = $st->fetch()) {
         $article = new Article($row);
+        $article->loadAuthors(); // Загружаем авторов для каждой статьи
         $list[] = $article;
     }
 
@@ -239,6 +247,11 @@ class Article
         $st->execute();
         $this->id = $conn->lastInsertId();
         $conn = null;
+        
+        // Сохраняем авторов после создания статьи
+        if (!empty($this->authors)) {
+            $this->setAuthors($this->authors);
+        }
     }
 
     /**
@@ -266,6 +279,11 @@ class Article
       $st->bindValue( ":is_visible", $this->is_visible, PDO::PARAM_INT );
       $st->execute();
       $conn = null;
+      
+      // Обновляем авторов после обновления статьи
+      if (isset($this->authors)) {
+          $this->setAuthors($this->authors);
+      }
     }
 
 
@@ -327,6 +345,7 @@ public static function getListForAdmin($numRows=1000000, $categoryId=null, $subc
 
     while ($row = $st->fetch()) {
         $article = new Article($row);
+        $article->loadAuthors(); // Загружаем авторов для каждой статьи
         $list[] = $article;
     }
 
@@ -341,10 +360,86 @@ public static function getListForAdmin($numRows=1000000, $categoryId=null, $subc
     $totalRows = $st->fetch();
     $conn = null;
     
-    return array(
+        return array(
         "results" => $list, 
         "totalRows" => $totalRows[0]
     );
 }
+
+    /**
+     * Получает список авторов текущей статьи
+     * 
+     * @return array Массив объектов User
+     */
+    public function getAuthors() {
+        if (is_null($this->id)) {
+            return array();
+        }
+        
+        $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+        $sql = "SELECT u.* FROM users u
+                INNER JOIN article_authors aa ON u.id = aa.userId
+                WHERE aa.articleId = :articleId
+                ORDER BY u.login ASC";
+        $st = $conn->prepare($sql);
+        $st->bindValue(":articleId", $this->id, PDO::PARAM_INT);
+        $st->execute();
+        
+        $authors = array();
+        while ($row = $st->fetch()) {
+            $authors[] = new User($row);
+        }
+        
+        $conn = null;
+        return $authors;
+    }
+    
+    /**
+     * Устанавливает авторов для текущей статьи
+     * 
+     * @param array $authorIds Массив ID пользователей (авторов)
+     */
+    public function setAuthors($authorIds) {
+        if (is_null($this->id)) {
+            trigger_error("Article::setAuthors(): Article ID is not set.", E_USER_ERROR);
+        }
+        
+        // Преобразуем массив в массив целых чисел
+        if (!is_array($authorIds)) {
+            $authorIds = array();
+        }
+        
+        $authorIds = array_map('intval', $authorIds);
+        $authorIds = array_filter($authorIds); // Убираем пустые значения
+        
+        $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
+        
+        // Удаляем все существующие связи
+        $sql = "DELETE FROM article_authors WHERE articleId = :articleId";
+        $st = $conn->prepare($sql);
+        $st->bindValue(":articleId", $this->id, PDO::PARAM_INT);
+        $st->execute();
+        
+        // Добавляем новые связи
+        if (!empty($authorIds)) {
+            $sql = "INSERT INTO article_authors (articleId, userId) VALUES (:articleId, :userId)";
+            $st = $conn->prepare($sql);
+            
+            foreach ($authorIds as $userId) {
+                $st->bindValue(":articleId", $this->id, PDO::PARAM_INT);
+                $st->bindValue(":userId", $userId, PDO::PARAM_INT);
+                $st->execute();
+            }
+        }
+        
+        $conn = null;
+    }
+    
+    /**
+     * Загружает авторов для статьи (вызывается после getById)
+     */
+    public function loadAuthors() {
+        $this->authors = $this->getAuthors();
+    }
 
 }

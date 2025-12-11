@@ -18,6 +18,17 @@
             <?php echo htmlspecialchars($results['subcategory']->name) ?>
         </a>
     <?php } ?>
+    
+    <?php if ( isset($results['article']->authors) && !empty($results['article']->authors) ) { ?>
+        <br>Авторы: 
+        <?php 
+        $authorNames = array();
+        foreach ($results['article']->authors as $author) {
+            $authorNames[] = htmlspecialchars($author->login);
+        }
+        echo implode(', ', $authorNames);
+        ?>
+    <?php } ?>
         
     </p>
 

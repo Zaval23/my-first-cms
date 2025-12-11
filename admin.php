@@ -200,6 +200,10 @@ function newArticle() {
                 $results['subcategoriesByCategory'][$subcategory->categoryId][] = $subcategory;
             }
             
+            // Загружаем список пользователей для выбора авторов
+            $userData = User::getList();
+            $results['users'] = $userData['results'];
+            
             require( TEMPLATE_PATH . "/admin/editArticle.php" );
             return;
         }
@@ -207,6 +211,11 @@ function newArticle() {
         // Пользователь получает форму редактирования статьи: сохраняем новую статью
         $article = new Article();
         $article->storeFormValues( $_POST );
+        
+        // Обрабатываем авторов
+        $authorIds = isset($_POST['authorIds']) && is_array($_POST['authorIds']) ? $_POST['authorIds'] : array();
+        $article->authors = $authorIds; // Сохраняем ID авторов для последующего сохранения
+        
         $article->insert();
         header( "Location: admin.php?status=changesSaved" );
 
@@ -230,6 +239,10 @@ function newArticle() {
             }
             $results['subcategoriesByCategory'][$subcategory->categoryId][] = $subcategory;
         }
+        
+        // Загружаем список пользователей для выбора авторов
+        $userData = User::getList();
+        $results['users'] = $userData['results'];
         
         require( TEMPLATE_PATH . "/admin/editArticle.php" );
     }
@@ -307,11 +320,20 @@ function editArticle() {
                 $results['subcategoriesByCategory'][$subcategory->categoryId][] = $subcategory;
             }
             
+            // Загружаем список пользователей для выбора авторов
+            $userData = User::getList();
+            $results['users'] = $userData['results'];
+            
             require(TEMPLATE_PATH . "/admin/editArticle.php");
             return;
         }
 
         $article->storeFormValues( $_POST );
+        
+        // Обрабатываем авторов
+        $authorIds = isset($_POST['authorIds']) && is_array($_POST['authorIds']) ? $_POST['authorIds'] : array();
+        $article->authors = $authorIds; // Сохраняем ID авторов для последующего сохранения
+        
         $article->update();
         header( "Location: admin.php?status=changesSaved" );
 
@@ -323,6 +345,7 @@ function editArticle() {
 
         // Пользователь еще не получил форму редактирования: выводим форму
         $results['article'] = Article::getById((int)$_GET['articleId']);
+        $results['article']->loadAuthors(); // Загружаем авторов для отображения в форме
         $data = Category::getList();
         $results['categories'] = $data['results'];
         
@@ -335,6 +358,10 @@ function editArticle() {
             }
             $results['subcategoriesByCategory'][$subcategory->categoryId][] = $subcategory;
         }
+        
+        // Загружаем список пользователей для выбора авторов
+        $userData = User::getList();
+        $results['users'] = $userData['results'];
         
         require(TEMPLATE_PATH . "/admin/editArticle.php");
     }
@@ -431,6 +458,9 @@ function newCategory() {
 
         // User has not posted the category edit form yet: display the form
         $results['category'] = new Category;
+        $results['subcategories'] = array();
+        $results['articlesCount'] = 0;
+        
         require( TEMPLATE_PATH . "/admin/editCategory.php" );
     }
 

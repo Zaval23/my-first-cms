@@ -17,6 +17,7 @@
               <th>Publication Date</th>
               <th>Article</th>
               <th>Category</th>
+              <th>Authors</th>
               <th>Visibility</th>
             </tr>
 
@@ -42,6 +43,19 @@
                 else {
                 echo "Без категории";
                 }?>
+              </td>
+              <td>
+                <?php 
+                if (isset($article->authors) && !empty($article->authors)) {
+                    $authorNames = array();
+                    foreach ($article->authors as $author) {
+                        $authorNames[] = htmlspecialchars($author->login);
+                    }
+                    echo implode(', ', $authorNames);
+                } else {
+                    echo '<em>Нет авторов</em>';
+                }
+                ?>
               </td>
               <td onclick="event.stopPropagation()" style="text-align: center;">
     <form method="post" action="admin.php?action=updateArticleVisibility" style="display: inline; margin: 0; padding: 0;">

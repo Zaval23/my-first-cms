@@ -35,6 +35,19 @@
                             <?php echo htmlspecialchars( $results['subcategories'][$article->subcategoryId]->name ) ?>
                         </a>
                     </span>
+                    <?php } ?>
+                    
+                    <?php if (isset($article->authors) && !empty($article->authors)) { ?>
+                    <span class="category">
+                        , автор<?php echo count($article->authors) > 1 ? 'ы' : '' ?>: 
+                        <?php 
+                        $authorNames = array();
+                        foreach ($article->authors as $author) {
+                            $authorNames[] = htmlspecialchars($author->login);
+                        }
+                        echo implode(', ', $authorNames);
+                        ?>
+                    </span>
                     <?php } ?>          
                 </h2>
               <p class="summary"><?php echo htmlspecialchars( $article->summary )?></p>

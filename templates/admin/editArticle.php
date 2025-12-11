@@ -75,6 +75,26 @@
                 <input type="date" name="publicationDate" id="publicationDate" placeholder="YYYY-MM-DD" required maxlength="10" value="<?php echo $results['article']->publicationDate ? date( "Y-m-d", $results['article']->publicationDate ) : "" ?>" />
               </li>
 
+              <li>
+                <label for="authorIds">Авторы статьи</label>
+                <select name="authorIds[]" id="authorIds" multiple size="5" style="min-height: 100px;">
+                  <?php if (isset($results['users']) && is_array($results['users'])) { ?>
+                    <?php 
+                    $selectedAuthorIds = array();
+                    if (isset($results['article']->authors) && is_array($results['article']->authors)) {
+                        foreach ($results['article']->authors as $author) {
+                            $selectedAuthorIds[] = $author->id;
+                        }
+                    }
+                    ?>
+                    <?php foreach ($results['users'] as $user) { ?>
+                      <option value="<?php echo $user->id?>"<?php echo in_array($user->id, $selectedAuthorIds) ? " selected" : ""?>><?php echo htmlspecialchars($user->login)?></option>
+                    <?php } ?>
+                  <?php } ?>
+                </select>
+                <small style="display: block; color: #666; margin-top: 5px;">Используйте Ctrl (или Cmd на Mac) для выбора нескольких авторов</small>
+              </li>
+
 
             </ul>
 
