@@ -13,6 +13,12 @@
     <?php if ( isset( $results['errorMessage'] ) ) { ?>
             <div class="errorMessage"><?php echo $results['errorMessage'] ?></div>
     <?php } ?>
+    
+    <?php if ( isset( $results['errors'] ) && is_array( $results['errors'] ) && !empty( $results['errors'] ) ) { ?>
+        <?php foreach ( $results['errors'] as $error ) { ?>
+            <div class="errorMessage"><?php echo htmlspecialchars( $error ) ?></div>
+        <?php } ?>
+    <?php } ?>
 
             <ul>
 
@@ -33,11 +39,34 @@
 
               <li>
                 <label for="categoryId">Article Category</label>
-                <select name="categoryId">
+                <select name="categoryId" id="categoryId" onchange="updateSubcategories()">
                   <option value="0"<?php echo !$results['article']->categoryId ? " selected" : ""?>>(none)</option>
                 <?php foreach ( $results['categories'] as $category ) { ?>
                   <option value="<?php echo $category->id?>"<?php echo ( $category->id == $results['article']->categoryId ) ? " selected" : ""?>><?php echo htmlspecialchars( $category->name )?></option>
                 <?php } ?>
+                </select>
+              </li>
+
+              <li>
+                <label for="subcategoryId">Article Subcategory</label>
+                <select name="subcategoryId" id="subcategoryId">
+                  <option value="">(none)</option>
+                  <?php 
+                  if ( isset( $results['subcategoriesByCategory'] ) ) {
+                      $currentCategoryId = $results['article']->categoryId ?? null;
+                      foreach ( $results['subcategoriesByCategory'] as $catId => $subcategories ) { 
+                          foreach ( $subcategories as $subcategory ) { 
+                  ?>
+                          <option value="<?php echo $subcategory->id?>" 
+                                  data-category-id="<?php echo $subcategory->categoryId ?>"
+                                  data-category-name="<?php echo htmlspecialchars( $results['categories'][$catId]->name ?? 'Unknown' ) ?>"
+                                  <?php echo ( isset($results['article']->subcategoryId) && $subcategory->id == $results['article']->subcategoryId ) ? " selected" : "" ?>
+                                  class="subcategory-option category-<?php echo $catId ?>"><?php echo htmlspecialchars( $results['categories'][$catId]->name ?? 'Unknown' ) ?> - <?php echo htmlspecialchars( $subcategory->name )?></option>
+                  <?php 
+                          }
+                      }
+                  }
+                  ?>
                 </select>
               </li>
 
@@ -62,6 +91,54 @@
               </a>
           </p>
     <?php } ?>
+
+<script>
+function updateSubcategories() {
+    var categorySelect = document.getElementById('categoryId');
+    var subcategorySelect = document.getElementById('subcategoryId');
+    var selectedCategoryId = categorySelect.value;
+    
+    // Обрабатываем все опции подкатегорий
+    var options = subcategorySelect.getElementsByTagName('option');
+    var selectedValue = subcategorySelect.value;
+    var foundSelected = false;
+    
+    for (var i = 0; i < options.length; i++) {
+        var option = options[i];
+        var optionCategoryId = option.getAttribute('data-category-id');
+        
+        // Пропускаем опцию "(none)"
+        if (option.value === '') {
+            continue;
+        }
+        
+        // Показываем только опции выбранной категории
+        if (optionCategoryId == selectedCategoryId && selectedCategoryId && selectedCategoryId != '0') {
+            option.style.display = '';
+            if (option.value == selectedValue) {
+                foundSelected = true;
+            }
+        } else {
+            option.style.display = 'none';
+        }
+    }
+    
+    // Если выбранная подкатегория не принадлежит выбранной категории, сбрасываем выбор
+    if (!foundSelected && selectedValue) {
+        subcategorySelect.value = '';
+    }
+    
+    // Если категория не выбрана, сбрасываем подкатегорию
+    if (!selectedCategoryId || selectedCategoryId == '0') {
+        subcategorySelect.value = '';
+    }
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    updateSubcategories();
+});
+</script>
 	  
 <?php include "templates/include/footer.php" ?>
 

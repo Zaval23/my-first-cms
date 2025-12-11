@@ -23,6 +23,9 @@ function initApplication()
         case 'viewArticle':
           viewArticle();
           break;
+        case 'subcategory':
+          subcategoryArchive();
+          break;
         default:
           homepage();
     }
@@ -48,10 +51,56 @@ function archive()
         $results['categories'][$category->id] = $category;
     }
     
+    // Получаем подкатегории для статей
+    $subcategoryData = Subcategory::getList();
+    $results['subcategories'] = array();
+    foreach ($subcategoryData['results'] as $subcategory) {
+        $results['subcategories'][$subcategory->id] = $subcategory;
+    }
+    
     $results['pageHeading'] = $results['category'] ?  $results['category']->name : "Article Archive";
     $results['pageTitle'] = $results['pageHeading'] . " | Widget News";
     
     require( TEMPLATE_PATH . "/archive.php" );
+}
+
+function subcategoryArchive() 
+{
+    $results = [];
+    
+    $subcategoryId = ( isset( $_GET['subcategoryId'] ) && $_GET['subcategoryId'] ) ? (int)$_GET['subcategoryId'] : null;
+    
+    if (!$subcategoryId) {
+        homepage();
+        return;
+    }
+    
+    $results['subcategory'] = Subcategory::getById( $subcategoryId );
+    
+    if (!$results['subcategory']) {
+        homepage();
+        return;
+    }
+    
+    // Получаем категорию для подкатегории
+    $results['category'] = Category::getById( $results['subcategory']->categoryId );
+    
+    $data = Article::getList( 100000, null, $subcategoryId );
+    
+    $results['articles'] = $data['results'];
+    $results['totalRows'] = $data['totalRows'];
+    
+    // Получаем все категории для навигации
+    $categoryData = Category::getList();
+    $results['categories'] = array();
+    foreach ( $categoryData['results'] as $category ) {
+        $results['categories'][$category->id] = $category;
+    }
+    
+    $results['pageHeading'] = $results['subcategory']->name;
+    $results['pageTitle'] = $results['pageHeading'] . " | Widget News";
+    
+    require( TEMPLATE_PATH . "/subcategoryArchive.php" );
 }
 
 /**
@@ -75,6 +124,11 @@ function viewArticle()
     }
     
     $results['category'] = Category::getById($results['article']->categoryId);
+    
+    if ($results['article']->subcategoryId) {
+        $results['subcategory'] = Subcategory::getById($results['article']->subcategoryId);
+    }
+    
     $results['pageTitle'] = $results['article']->title . " | Простая CMS";
     
     require(TEMPLATE_PATH . "/viewArticle.php");
@@ -94,7 +148,14 @@ function homepage()
     $results['categories'] = array();
     foreach ( $data['results'] as $category ) { 
         $results['categories'][$category->id] = $category;
-    } 
+    }
+    
+    // Получаем подкатегории для статей
+    $subcategoryData = Subcategory::getList();
+    $results['subcategories'] = array();
+    foreach ($subcategoryData['results'] as $subcategory) {
+        $results['subcategories'][$subcategory->id] = $subcategory;
+    }
     
     $results['pageTitle'] = "Простая CMS на PHP";
     

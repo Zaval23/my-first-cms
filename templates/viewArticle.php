@@ -11,6 +11,13 @@
             <?php echo htmlspecialchars($results['category']->name) ?>
         </a>
     <?php } ?>
+    
+    <?php if ( isset($results['subcategory']) && $results['subcategory'] ) { ?>
+        , подкатегория 
+        <a href="./?action=subcategory&amp;subcategoryId=<?php echo $results['subcategory']->id?>">
+            <?php echo htmlspecialchars($results['subcategory']->name) ?>
+        </a>
+    <?php } ?>
         
     </p>
 

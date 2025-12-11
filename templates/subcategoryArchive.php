@@ -2,8 +2,13 @@
 	  
     <h1><?php echo htmlspecialchars( $results['pageHeading'] ) ?></h1>
     
-    <?php if ( $results['category'] ) { ?>
-    <h3 class="categoryDescription"><?php echo htmlspecialchars( $results['category']->description ) ?></h3>
+    <?php if ( $results['subcategory'] ) { ?>
+    <p class="categoryDescription">
+        Подкатегория категории 
+        <a href="./?action=archive&amp;categoryId=<?php echo $results['category']->id?>">
+            <?php echo htmlspecialchars( $results['category']->name ) ?>
+        </a>
+    </p>
     <?php } ?>
 
     <ul id="headlines" class="archive">
@@ -19,20 +24,11 @@
                         <?php echo htmlspecialchars( $article->title )?>
                     </a>
 
-                    <?php if ( !$results['category'] && $article->categoryId ) { ?>
+                    <?php if ( $article->categoryId ) { ?>
                     <span class="category">
                         in 
                         <a href=".?action=archive&amp;categoryId=<?php echo $article->categoryId?>">
                             <?php echo htmlspecialchars( $results['categories'][$article->categoryId]->name ) ?>
-                        </a>
-                    </span>
-                    <?php } ?>
-                    
-                    <?php if ( isset($article->subcategoryId) && isset($results['subcategories'][$article->subcategoryId]) ) { ?>
-                    <span class="category">
-                        , подкатегория 
-                        <a href=".?action=subcategory&amp;subcategoryId=<?php echo $article->subcategoryId?>">
-                            <?php echo htmlspecialchars( $results['subcategories'][$article->subcategoryId]->name ) ?>
                         </a>
                     </span>
                     <?php } ?>          
@@ -44,8 +40,9 @@
 
     </ul>
 
-    <p><?php echo $results['totalRows']?> article<?php echo ( $results['totalRows'] != 1 ) ? 's' : '' ?> in total.</p>
+    <p><?php echo $results['totalRows']?> стат<?php echo ( $results['totalRows'] % 10 >= 2 && $results['totalRows'] % 10 <= 4 && ( $results['totalRows'] % 100 < 10 || $results['totalRows'] % 100 >= 20 ) ) ? 'ьи' : ( ( $results['totalRows'] % 10 == 1 && $results['totalRows'] % 100 != 11 ) ? 'ья' : 'ей' ) ?> всего.</p>
 
-    <p><a href="./">Return to Homepage</a></p>
+    <p><a href="./">Вернуться на главную страницу</a></p>
 	  
 <?php include "templates/include/footer.php" ?>
+

@@ -28,6 +28,11 @@ class Article
     public $categoryId = null;
 
     /**
+    * @var int ID подкатегории статьи
+    */
+    public $subcategoryId = null;
+
+    /**
     * @var string Краткое описание статьи
     */
     public $summary = null;
@@ -63,6 +68,10 @@ class Article
       
       if (isset($data['categoryId'])) {
           $this->categoryId = (int) $data['categoryId'];      
+      }
+      
+      if (isset($data['subcategoryId'])) {
+          $this->subcategoryId = $data['subcategoryId'] ? (int) $data['subcategoryId'] : null;      
       }
       
       if (isset($data['summary'])) {
@@ -133,11 +142,12 @@ class Article
     *
     * @param int $numRows Количество возвращаемых строк (по умолчанию = 1000000)
     * @param int $categoryId Вернуть статьи только из категории с указанным ID
+    * @param int $subcategoryId Вернуть статьи только из подкатегории с указанным ID
     * @param string $order Столбец, по которому выполняется сортировка статей (по умолчанию = "publicationDate DESC")
     * @return Array|false Двух элементный массив: results => массив объектов Article; totalRows => общее количество строк
     */
     public static function getList($numRows=1000000, 
-        $categoryId=null, $order="publicationDate DESC") 
+        $categoryId=null, $subcategoryId=null, $order="publicationDate DESC") 
 {
     $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
     $fromPart = "FROM articles";
@@ -150,6 +160,12 @@ class Article
     if ($categoryId) {
         $whereClauses[] = "categoryId = :categoryId";
         $params[':categoryId'] = $categoryId;
+    }
+    
+    // Условие для подкатегории
+    if ($subcategoryId) {
+        $whereClauses[] = "subcategoryId = :subcategoryId";
+        $params[':subcategoryId'] = $subcategoryId;
     }
     
     // Условие для видимости - ВСЕГДА показываем только видимые статьи
@@ -211,9 +227,10 @@ class Article
 
         // Вставляем статью
         $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
-        $sql = "INSERT INTO articles ( publicationDate, categoryId, title, summary, content, is_visible ) VALUES ( FROM_UNIXTIME(:publicationDate), :categoryId, :title, :summary, :content, :is_visible )";        $st = $conn->prepare ( $sql );
+        $sql = "INSERT INTO articles ( publicationDate, categoryId, subcategoryId, title, summary, content, is_visible ) VALUES ( FROM_UNIXTIME(:publicationDate), :categoryId, :subcategoryId, :title, :summary, :content, :is_visible )";        $st = $conn->prepare ( $sql );
         $st->bindValue( ":publicationDate", $this->publicationDate, PDO::PARAM_INT );
         $st->bindValue( ":categoryId", $this->categoryId, PDO::PARAM_INT );
+        $st->bindValue( ":subcategoryId", $this->subcategoryId, $this->subcategoryId ? PDO::PARAM_INT : PDO::PARAM_NULL );
         $st->bindValue( ":title", $this->title, PDO::PARAM_STR );
         $st->bindValue( ":summary", $this->summary, PDO::PARAM_STR );
         $st->bindValue( ":content", $this->content, PDO::PARAM_STR );
@@ -236,11 +253,12 @@ class Article
 
       // Обновляем статью
       $conn = new PDO( DB_DSN, DB_USERNAME, DB_PASSWORD );
-      $sql = "UPDATE articles SET publicationDate=FROM_UNIXTIME(:publicationDate), categoryId=:categoryId, title=:title, summary=:summary, content=:content, is_visible=:is_visible WHERE id = :id";
+      $sql = "UPDATE articles SET publicationDate=FROM_UNIXTIME(:publicationDate), categoryId=:categoryId, subcategoryId=:subcategoryId, title=:title, summary=:summary, content=:content, is_visible=:is_visible WHERE id = :id";
       
       $st = $conn->prepare ( $sql );
       $st->bindValue( ":publicationDate", $this->publicationDate, PDO::PARAM_INT );
       $st->bindValue( ":categoryId", $this->categoryId, PDO::PARAM_INT );
+      $st->bindValue( ":subcategoryId", $this->subcategoryId, $this->subcategoryId ? PDO::PARAM_INT : PDO::PARAM_NULL );
       $st->bindValue( ":title", $this->title, PDO::PARAM_STR );
       $st->bindValue( ":summary", $this->summary, PDO::PARAM_STR );
       $st->bindValue( ":content", $this->content, PDO::PARAM_STR );
@@ -270,20 +288,38 @@ class Article
 /**
  * Возвращает все статьи для админки (без фильтрации по видимости)
  */
-public static function getListForAdmin($numRows=1000000, $categoryId=null, $order="publicationDate DESC") {
+public static function getListForAdmin($numRows=1000000, $categoryId=null, $subcategoryId=null, $order="publicationDate DESC") {
     $conn = new PDO(DB_DSN, DB_USERNAME, DB_PASSWORD);
     $fromPart = "FROM articles";
-    $categoryClause = $categoryId ? "WHERE categoryId = :categoryId" : "";
+    
+    $whereClauses = array();
+    $params = array();
+    
+    if ($categoryId) {
+        $whereClauses[] = "categoryId = :categoryId";
+        $params[':categoryId'] = $categoryId;
+    }
+    
+    if ($subcategoryId) {
+        $whereClauses[] = "subcategoryId = :subcategoryId";
+        $params[':subcategoryId'] = $subcategoryId;
+    }
+    
+    $whereClause = "";
+    if (!empty($whereClauses)) {
+        $whereClause = "WHERE " . implode(" AND ", $whereClauses);
+    }
+    
     $sql = "SELECT *, UNIX_TIMESTAMP(publicationDate) 
             AS publicationDate
-            $fromPart $categoryClause
+            $fromPart $whereClause
             ORDER BY  $order  LIMIT :numRows";
     
     $st = $conn->prepare($sql);
     $st->bindValue(":numRows", $numRows, PDO::PARAM_INT);
     
-    if ($categoryId) {
-        $st->bindValue(":categoryId", $categoryId, PDO::PARAM_INT);
+    foreach ($params as $key => $value) {
+        $st->bindValue($key, $value, PDO::PARAM_INT);
     }
     
     $st->execute();
@@ -294,11 +330,13 @@ public static function getListForAdmin($numRows=1000000, $categoryId=null, $orde
         $list[] = $article;
     }
 
-    $sql = "SELECT COUNT(*) AS totalRows $fromPart $categoryClause";
+    $sql = "SELECT COUNT(*) AS totalRows $fromPart $whereClause";
     $st = $conn->prepare($sql);
-    if ($categoryId) {
-        $st->bindValue(":categoryId", $categoryId, PDO::PARAM_INT);
+    
+    foreach ($params as $key => $value) {
+        $st->bindValue($key, $value, PDO::PARAM_INT);
     }
+    
     $st->execute();                    
     $totalRows = $st->fetch();
     $conn = null;
